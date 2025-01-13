@@ -27,15 +27,25 @@ var (
 	socket   = flag.String("socket", "", "Path to the extensions UNIX domain socket")
 )
 
+var logger *log.Logger
+
 func main() {
+    f, err := os.OpenFile("/tmp/osquery_extension.log", os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Println(err)
+	}
+	defer f.Close()
+
+	logger = log.New(f, "osquery.json_extension", log.LstdFlags)
+
 	flag.Parse()
 	if *socket == "" {
-		log.Fatalln("Missing required --socket argument")
+		logger.Fatalln("Missing required --socket argument")
 	}
 
 	client, err := osquery.NewClient(*socket, 10*time.Second)
 	if err != nil {
-		log.Fatalf("Error creating extension: %s\n", err)
+		logger.Fatalf("Error creating extension: %s\n", err)
 	}
 	defer client.Close()
 
@@ -43,28 +53,30 @@ func main() {
 		query, err := decodeQuery()
 		if err != nil {
 			if err == io.EOF {
-				log.Println("client has disconnected")
+				logger.Println("client has disconnected")
 				break
 			}
-			log.Fatalf("Error decoding JSON: %v\n", err)
+			logger.Fatalf("Error decoding JSON: %v\n", err)
 		}
 
+		logger.Printf("received query: %v", query)
+
 		if query.SQL == ExitString {
-			log.Println("Exit command received, terminating...")
+			logger.Println("Exit command received, terminating...")
 			break
 		}
 
 		resp, err := client.Query(query.SQL)
 		if err != nil {
-			log.Fatalf("Error communicating with osqueryi: %v", err)
+			logger.Fatalf("Error communicating with osqueryi: %v", err)
 		}
 		if resp.Status.Code != 0 {
-			log.Printf("osqueryi returned error: %s", resp.Status.Message)
+			logger.Printf("osqueryi returned error: %s", resp.Status.Message)
 		}
 
 		err = parseAndSendResult(resp.Response)
 		if err != nil {
-			log.Fatalf("Error parsing and sending result: %v\n", err)
+			logger.Fatalf("Error parsing and sending result: %v\n", err)
 		}
 	}
 }
