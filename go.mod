@@ -1,4 +1,4 @@
-module github.com/fueledByOats/osquery-extension-stdio-json
+module osquery-extension-stdio-json
 
 go 1.20
 
